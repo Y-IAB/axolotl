@@ -11,7 +11,11 @@ ARG PYTORCH_VERSION="2.1.2"
 ENV PYTORCH_VERSION=$PYTORCH_VERSION
 
 RUN apt-get update && \
-    apt-get install -y --allow-change-held-packages vim curl nano libnccl2 libnccl-dev
+    apt-get install -y --allow-change-held-packages vim curl nano libnccl2 libnccl-dev apt-transport-https ca-certificates gnupg
+
+RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
+    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && \
+    apt-get update -y && apt-get install google-cloud-sdk -y
 
 WORKDIR /workspace
 

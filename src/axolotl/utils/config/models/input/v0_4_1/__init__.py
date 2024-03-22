@@ -439,6 +439,7 @@ class AxolotlInputConfig(
     )
     dataset_processes: Optional[int] = Field(default=os.cpu_count())
     dataset_keep_in_memory: Optional[bool] = None
+    pre_expanded_tokenizer_for_output: Optional[str] = None
     dataloader_pin_memory: Optional[bool] = None
     dataloader_num_workers: Optional[int] = None
     dataloader_prefetch_factor: Optional[int] = None

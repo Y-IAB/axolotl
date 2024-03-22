@@ -2,7 +2,7 @@
 
 import logging
 import os
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 import torch
 from datasets import Dataset, IterableDataset
@@ -40,11 +40,11 @@ class TokenizedPromptDataset(Dataset):
         self.process_count = process_count
         self.keep_in_memory = keep_in_memory
         super().__init__(
-            self.process(dataset).data,
+            self.process(dataset, kwargs.pop("label_map", None)).data,
             **kwargs,
         )
 
-    def process(self, dataset):
+    def process(self, dataset: Dataset, label_map: Dict[int, int]) -> Dataset:
         features = dataset.features.keys()
         num_proc = min(64, self.process_count if self.process_count else os.cpu_count())
 
@@ -59,6 +59,17 @@ class TokenizedPromptDataset(Dataset):
             keep_in_memory=self.keep_in_memory,
             desc="Tokenizing Prompts",
             **map_kwargs,
+        ).map(
+            lambda sample: {
+                "input_ids": sample["input_ids"],
+                "attention_mask": sample["attention_mask"],
+                # Falls back to the input_id if no label mapping is provided
+                "labels": [label_map.get(input_id, input_id) for input_id in sample["input_ids"]],
+            },
+            num_proc=num_proc,
+            remove_columns=features,
+            keep_in_memory=self.keep_in_memory,
+            desc="Mapping Labels",
         )
 
 

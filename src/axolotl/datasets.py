@@ -67,7 +67,6 @@ class TokenizedPromptDataset(Dataset):
                 "labels": [label_map.get(input_id, input_id) for input_id in sample["input_ids"]],
             },
             num_proc=num_proc,
-            remove_columns=features,
             keep_in_memory=self.keep_in_memory,
             desc="Mapping Labels",
         )

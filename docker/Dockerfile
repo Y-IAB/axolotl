@@ -17,6 +17,11 @@ RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.
     curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && \
     apt-get update -y && apt-get install google-cloud-sdk -y
 
+RUN export GCSFUSE_REPO=gcsfuse-`lsb_release -c -s` && \
+    echo "deb [signed-by=/usr/share/keyrings/cloud.google.asc] https://packages.cloud.google.com/apt $GCSFUSE_REPO main" | tee /etc/apt/sources.list.d/gcsfuse.list && \
+    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && \
+    apt-get update -y && apt-get install gcsfuse -y
+
 WORKDIR /workspace
 
 RUN git clone --depth=1 https://github.com/Y-IAB/axolotl.git

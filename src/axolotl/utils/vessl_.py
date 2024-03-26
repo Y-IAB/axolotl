@@ -12,6 +12,3 @@ def setup_vessl_env_vars(cfg: DictDefault):
     if credential_path:
         cfg.use_vessl = True
         cfg.vessl_credential_path = credential_path
-
-        if not cfg.vessl_metrics:
-            cfg.vessl_metrics = ["grad_norm", "learning_rate", "loss"]

@@ -840,10 +840,7 @@ class TrainerBuilderBase(abc.ABC):
             from axolotl.utils.callbacks.vessl_ import VesslLogStepMetricsCallback
 
             callbacks.append(
-                VesslLogStepMetricsCallback(
-                    self.cfg.vessl_credential_path,
-                    self.cfg.vessl_metrics,
-                )
+                VesslLogStepMetricsCallback(self.cfg.vessl_credential_path)
             )
 
         return callbacks

@@ -892,6 +892,12 @@ class HFCausalTrainerBuilder(TrainerBuilderBase):
             callbacks.append(
                 SaveAxolotlConfigtoMlflowCallback(self.cfg.axolotl_config_path)
             )
+        if self.cfg.use_vessl:
+            from axolotl.utils.callbacks.puree_ import VesslLogCheckpointCallback
+
+            callbacks.append(
+                VesslLogCheckpointCallback()
+            )
 
         if self.cfg.loss_watchdog_threshold is not None:
             callbacks.append(LossWatchDogCallback(self.cfg))

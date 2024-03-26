@@ -836,6 +836,16 @@ class TrainerBuilderBase(abc.ABC):
                 SaveAxolotlConfigtoWandBCallback(self.cfg.axolotl_config_path)
             )
 
+        if self.cfg.use_vessl:
+            from axolotl.utils.callbacks.vessl_ import VesslLogStepMetricsCallback
+
+            callbacks.append(
+                VesslLogStepMetricsCallback(
+                    self.cfg.vessl_credential_path,
+                    self.cfg.vessl_metrics,
+                )
+            )
+
         return callbacks
 
     @abstractmethod
@@ -891,12 +901,6 @@ class HFCausalTrainerBuilder(TrainerBuilderBase):
 
             callbacks.append(
                 SaveAxolotlConfigtoMlflowCallback(self.cfg.axolotl_config_path)
-            )
-        if self.cfg.use_vessl:
-            from axolotl.utils.callbacks.puree_ import VesslLogCheckpointCallback
-
-            callbacks.append(
-                VesslLogCheckpointCallback(self.cfg.vessl_credential_path)
             )
 
         if self.cfg.loss_watchdog_threshold is not None:

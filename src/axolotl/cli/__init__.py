@@ -38,9 +38,9 @@ from axolotl.utils.dict import DictDefault
 from axolotl.utils.distributed import is_main_process
 from axolotl.utils.mlflow_ import setup_mlflow_env_vars
 from axolotl.utils.models import load_tokenizer
-from axolotl.utils.puree_ import setup_puree_env_vars
 from axolotl.utils.tokenization import check_dataset_labels
 from axolotl.utils.trainer import prepare_optim_env
+from axolotl.utils.vessl_ import setup_vessl_env_vars
 from axolotl.utils.wandb_ import setup_wandb_env_vars
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -370,7 +370,7 @@ def load_cfg(config: Union[str, Path] = Path("examples/"), **kwargs):
 
     setup_mlflow_env_vars(cfg)
 
-    setup_puree_env_vars(cfg)
+    setup_vessl_env_vars(cfg)
 
     return cfg
 

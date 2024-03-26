@@ -896,7 +896,7 @@ class HFCausalTrainerBuilder(TrainerBuilderBase):
             from axolotl.utils.callbacks.puree_ import VesslLogCheckpointCallback
 
             callbacks.append(
-                VesslLogCheckpointCallback()
+                VesslLogCheckpointCallback(self.cfg.vessl_credential_path)
             )
 
         if self.cfg.loss_watchdog_threshold is not None:

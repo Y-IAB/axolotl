@@ -1,4 +1,4 @@
-"""Puree module for trainer callbacks"""
+"""Vessl module for trainer callbacks"""
 import logging
 from typing import Dict, List
 
@@ -8,7 +8,7 @@ from transformers.training_args import TrainingArguments
 
 LOG = logging.getLogger("axolotl.callbacks")
 
-class VesslLogStepMetricsCallback(TrainerCallback):
+class VesslLogMetricsCallback(TrainerCallback):
 
     def __init__(self, credential_path: str, metrics: List[str]) -> None:
         vessl.configure(credentials_file=credential_path)

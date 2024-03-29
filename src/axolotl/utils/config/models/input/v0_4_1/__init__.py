@@ -6,7 +6,7 @@ Module for pydantic models for configuration
 import logging
 import os
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 from pydantic import BaseModel, Field, conlist, field_validator, model_validator
 from transformers import SchedulerType
@@ -151,12 +151,6 @@ class PeftConfig(BaseModel):
     loftq_config: Optional[LoftQConfig] = None
 
 
-class AutoType(str, Enum):
-    """auto type string configuration subset - used for bf16"""
-
-    AUTO = "auto"
-
-
 class SpecialTokensConfig(BaseModel):
     """Special tokens configuration subset"""
 
@@ -185,7 +179,8 @@ class LoraConfig(BaseModel):
     peft_layers_to_transform: Optional[List[int]] = None
     peft: Optional[PeftConfig] = None
     peft_use_dora: Optional[bool] = None
-    peft_use_relora: Optional[bool] = None
+    peft_use_rslora: Optional[bool] = None
+    peft_layer_replication: Optional[List[Tuple[int, int]]] = None
 
     lora_on_cpu: Optional[bool] = None
     gptq: Optional[bool] = None
@@ -307,12 +302,14 @@ class HyperparametersConfig(BaseModel):
         },
     )
 
-    train_on_inputs: Optional[bool] = None
+    train_on_inputs: Optional[bool] = False
     group_by_length: Optional[bool] = None
 
     learning_rate: Union[str, float]
-    weight_decay: Optional[float] = None
-    optimizer: Optional[Union[OptimizerNames, Literal["lion_pytorch"]]] = None
+    weight_decay: Optional[float] = 0.0
+    optimizer: Optional[
+        Union[OptimizerNames, Literal["lion_pytorch"]]
+    ] = OptimizerNames.ADAMW_HF.value
     optim_args: Optional[Union[str, Dict[str, Any]]] = Field(
         default=None, metadata={"help": "Optional arguments to supply to optimizer."}
     )
@@ -323,7 +320,7 @@ class HyperparametersConfig(BaseModel):
         },
     )
     torchdistx_path: Optional[str] = None
-    lr_scheduler: Optional[SchedulerType] = None
+    lr_scheduler: Optional[SchedulerType] = "cosine"
     lr_scheduler_kwargs: Optional[Dict[str, Any]] = None
     lr_quadratic_warmup: Optional[bool] = None
     cosine_min_lr_ratio: Optional[float] = None
@@ -473,7 +470,7 @@ class AxolotlInputConfig(
     loss_watchdog_threshold: Optional[float] = None
     loss_watchdog_patience: Optional[int] = None
 
-    bf16: Optional[Union[AutoType, bool]] = AutoType.AUTO
+    bf16: Optional[Union[Literal["auto"], bool]] = "auto"
     fp16: Optional[bool] = None
     bfloat16: Optional[bool] = None  # for non-AMP cases
     float16: Optional[bool] = None  # for non-AMP cases
@@ -487,7 +484,7 @@ class AxolotlInputConfig(
 
     unfrozen_parameters: Optional[List[str]] = None
 
-    sequence_len: int = Field(default=1024)
+    sequence_len: int = Field(default=512)
     sample_packing: Optional[bool] = None
     eval_sample_packing: Optional[bool] = None
     pad_to_sequence_len: Optional[bool] = None
@@ -548,10 +545,10 @@ class AxolotlInputConfig(
     sample_packing_eff_est: Optional[float] = None
     axolotl_config_path: Optional[str] = None
 
-    is_falcon_derived_model: Optional[bool] = Field(default=False)
-    is_llama_derived_model: Optional[bool] = Field(default=False)
-    is_mistral_derived_model: Optional[bool] = Field(default=False)
-    is_qwen_derived_model: Optional[bool] = Field(default=False)
+    is_falcon_derived_model: Optional[bool] = Field(default=None)
+    is_llama_derived_model: Optional[bool] = Field(default=None)
+    is_mistral_derived_model: Optional[bool] = Field(default=None)
+    is_qwen_derived_model: Optional[bool] = Field(default=None)
 
     @field_validator("datasets", mode="before")
     @classmethod

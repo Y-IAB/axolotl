@@ -395,6 +395,12 @@ class WandbConfig(BaseModel):
         return data
 
 
+class VesslConfig(BaseModel):
+    """Vessl AI configuration subset"""
+
+    vessl_credential_path: Optional[str] = None
+
+
 # pylint: disable=too-many-public-methods,too-many-ancestors
 class AxolotlInputConfig(
     ModelInputConfig,
@@ -404,6 +410,7 @@ class AxolotlInputConfig(
     HyperparametersConfig,
     WandbConfig,
     MLFlowConfig,
+    VesslConfig,
     RemappedParameters,
     DeprecatedParameters,
     BaseModel,

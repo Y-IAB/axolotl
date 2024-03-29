@@ -854,7 +854,7 @@ class TrainerBuilderBase(abc.ABC):
                 SaveAxolotlConfigtoWandBCallback(self.cfg.axolotl_config_path)
             )
 
-        if self.cfg.use_vessl:
+        if self.cfg.vessl_credential_path:
             from axolotl.utils.callbacks.vessl_ import VesslLogMetricsCallback
 
             callbacks.append(

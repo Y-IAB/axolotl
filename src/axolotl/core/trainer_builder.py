@@ -857,9 +857,7 @@ class TrainerBuilderBase(abc.ABC):
         if self.cfg.vessl_credential_path:
             from axolotl.utils.callbacks.vessl_ import VesslLogMetricsCallback
 
-            callbacks.append(
-                VesslLogMetricsCallback(self.cfg.vessl_credential_path)
-            )
+            callbacks.append(VesslLogMetricsCallback(self.cfg.vessl_credential_path))
 
         return callbacks
 

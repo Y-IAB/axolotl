@@ -1052,6 +1052,9 @@ def _first_subword(token, pre_expanded_tokenizer: PreTrainedTokenizerBase) -> st
     assert pre_expanded_tokenizer is not None, "pre_expanded_tokenizer must be provided to get the first subword"
 
     sub_words = pre_expanded_tokenizer.tokenize(token)
-    if sub_words and sub_words[0] == "▁":
-        return sub_words[1] if len(sub_words) > 1 else sub_words[0]
-    return sub_words[0] if sub_words else token
+    if sub_words[0] == "▁":
+        sub_words = sub_words[1:]
+    elif sub_words[0] == "▁▁":
+        sub_words[0] = "▁"
+    LOG.debug(f"{token} -> {sub_words}")
+    return sub_words[0]

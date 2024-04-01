@@ -63,8 +63,11 @@ class TokenizedPromptDataset(Dataset):
             lambda sample: {
                 "input_ids": sample["input_ids"],
                 "attention_mask": sample["attention_mask"],
-                # Falls back to the input_id if no label mapping is provided
-                "labels": [label_map.get(input_id, input_id) for input_id in sample["input_ids"]],
+                # Falls back to the input_id if no label mapping is provided. If the label is -100, keep it
+                "labels": [
+                    label if label < 0 else label_map.get(input_id, input_id)
+                    for input_id, label in zip(sample["input_ids"], sample["labels"])
+                ],
             },
             num_proc=num_proc,
             keep_in_memory=self.keep_in_memory,

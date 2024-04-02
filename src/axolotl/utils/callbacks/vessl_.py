@@ -23,5 +23,7 @@ class VesslLogMetricsCallback(TrainerCallback):
         logs: Dict[str, float],
         **kwargs  # pylint: disable=unused-argument
     ):
+        # is_world_process_zero: Whether or not this process is the global main process (when training in a
+        # distributed fashion on several machines, this is only going to be `True` for one process).
         if state.is_world_process_zero:
             vessl.log(logs, state.global_step)

@@ -9,5 +9,5 @@ def setup_vessl_env_vars(cfg: DictDefault):
     # VESSL_RUN_INITIAL_CONFIG is a variable that contain path to
     # default credential inside a VESSL Run
     credential_path = os.environ.get("VESSL_RUN_INITIAL_CONFIG")
-    if credential_path:
+    if credential_path and not cfg.vessl_credential_path:
         cfg.vessl_credential_path = credential_path

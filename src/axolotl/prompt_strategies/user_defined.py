@@ -24,6 +24,7 @@ class UserDefinedDatasetConfig:
     field_input: str = "input"
     field_output: str = "output"
     format: str = "{instruction} {input} "
+    output_format: str = "{output}"
     no_input_format: str = "{instruction} "
     system_format: str = "{system}"
 
@@ -49,14 +50,17 @@ def load(tokenizer, cfg, ds_cfg: Optional[UserDefinedDatasetConfig] = None):
         field_instruction,
         field_input,
         field_output,
+        output_format: str,
         field_system,
         system_prompt,
         prompt,
     ) -> Tuple[str, str, str, str]:
+        output = prompt[field_output] if field_output in prompt else ""
+        formatted_output = output_format.format(output=output) if output_format else output
         return (
             prompt[field_instruction],
             prompt[field_input] if field_input in prompt else "",
-            prompt[field_output] if field_output in prompt else "",
+            formatted_output,
             prompt[field_system] if field_system in prompt else system_prompt,
         )
 
@@ -91,6 +95,7 @@ def load(tokenizer, cfg, ds_cfg: Optional[UserDefinedDatasetConfig] = None):
             ds_cfg.field_instruction,
             ds_cfg.field_input,
             ds_cfg.field_output,
+            ds_cfg.output_format,
             ds_cfg.field_system,
             system_prompt,
         ),

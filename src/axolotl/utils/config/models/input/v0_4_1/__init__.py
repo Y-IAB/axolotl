@@ -75,6 +75,7 @@ class UserDefinedPrompterType(BaseModel):
     field_output: Optional[str] = None
 
     format: Optional[str] = None
+    output_format: Optional[str] = None
     no_input_format: Optional[str] = None
     field: Optional[str] = None
 

@@ -172,17 +172,21 @@ def process_datasets_for_packing(cfg, train_dataset, eval_dataset):
     return train_dataset, eval_dataset
 
 
-def process_pretraining_datasets_for_packing(train_dataset, sequence_len):
+def process_pretraining_datasets_for_packing(
+    train_dataset, sequence_len, skip_position_ids=True
+):
     drop_long = partial(drop_long_seq, sequence_len=sequence_len)
 
     train_dataset = train_dataset.filter(
         drop_long,
         desc="Dropping Long Sequences",
     )
-    train_dataset = train_dataset.map(
-        add_position_ids,
-        desc="Add position_id column (Pretraining Sample Packing)",
-    )
+    if skip_position_ids:
+        train_dataset = train_dataset.map(
+            add_position_ids,
+            desc="Add position_id column (Pretraining Sample Packing)",
+        )
+
     return train_dataset
 
 
@@ -194,7 +198,7 @@ def calculate_total_num_steps(cfg, train_dataset, update=True):
             .apply(lambda x: len(x))  # pylint: disable=unnecessary-lambda
             .values
         )
-        LOG.debug(f"total_num_tokens: {total_num_tokens}", main_process_only=True)
+        LOG.debug(f"total_num_tokens: {total_num_tokens:_}", main_process_only=True)
         if update:
             cfg.total_num_tokens = total_num_tokens
 
@@ -208,7 +212,7 @@ def calculate_total_num_steps(cfg, train_dataset, update=True):
             .sum()
         )
         LOG.debug(
-            f"`total_supervised_tokens: {total_supervised_tokens}`",
+            f"`total_supervised_tokens: {total_supervised_tokens:_}`",
             main_process_only=True,
         )
         if update:
@@ -235,7 +239,7 @@ def calculate_total_num_steps(cfg, train_dataset, update=True):
                 * cfg.num_epochs
             )
             LOG.debug(
-                f"total_num_tokens: {cfg.total_num_tokens}, total_num_steps: {total_num_steps}",
+                f"total_num_tokens: {cfg.total_num_tokens:_}, total_num_steps: {total_num_steps:_}",
                 main_process_only=True,
             )
         else:

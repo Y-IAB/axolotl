@@ -14,7 +14,7 @@ from datasets import (
 )
 from huggingface_hub import hf_hub_download
 from huggingface_hub.utils import HFValidationError
-from transformers import PreTrainedTokenizerBase
+from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
 from axolotl.common.const import DEFAULT_DATASET_PREPARED_PATH
 from axolotl.datasets import TokenizedPromptDataset
@@ -537,6 +537,21 @@ def load_prepare_datasets(
     return train_dataset, eval_dataset, prompters
 
 
+def _create_id_to_first_subword_id_map(pre_expanded_tokenizer: PreTrainedTokenizerBase, tokenizer: PreTrainedTokenizerBase) -> Dict[int, int]:
+    return {
+        i: first_subword_id
+        # Use the normal token IDs for the pre-existed tokens and get the first subword ID for the new tokens
+        for i, first_subword_id in enumerate(
+            list(range(len(pre_expanded_tokenizer))) +
+            _ids_to_first_subword_ids(
+                list(range(len(pre_expanded_tokenizer), len(tokenizer))),
+                pre_expanded_tokenizer,
+                tokenizer,
+            )
+        )
+    }
+
+
 def get_dataset_wrapper(
     config_dataset,
     tokenizer,
@@ -551,6 +566,10 @@ def get_dataset_wrapper(
     ds_kwargs = {
         "process_count": cfg.dataset_processes,
         "keep_in_memory": cfg.dataset_keep_in_memory is True,
+        "label_map": _create_id_to_first_subword_id_map(
+            AutoTokenizer.from_pretrained(cfg.pre_expanded_tokenizer_for_output),
+            tokenizer
+        ) if cfg.pre_expanded_tokenizer_for_output else {},
     }
 
     if (
@@ -703,3 +722,33 @@ def get_dataset_wrapper(
         )
 
     return dataset_wrapper, dataset_prompter
+
+
+def _ids_to_first_subword_ids(
+    token_ids: List[int],
+    pre_expanded_tokenizer: PreTrainedTokenizerBase,
+    expanded_tokenizer: PreTrainedTokenizerBase
+) -> List[int]:
+    """
+    Given a list of token ids, return a list of the first subword ids for each token.
+    """
+
+    token_first_subwords = [
+        _first_subword(token, pre_expanded_tokenizer) for token in expanded_tokenizer.convert_ids_to_tokens(token_ids)
+    ]
+    return pre_expanded_tokenizer.convert_tokens_to_ids(token_first_subwords)
+
+
+def _first_subword(token, pre_expanded_tokenizer: PreTrainedTokenizerBase) -> str:
+    """
+    Given a token, return the first subword using the pre-expanded tokenizer.
+    """
+    assert pre_expanded_tokenizer is not None, "pre_expanded_tokenizer must be provided to get the first subword"
+
+    sub_words = pre_expanded_tokenizer.tokenize(token)
+    if sub_words[0] == "▁":
+        sub_words = sub_words[1:]
+    elif sub_words[0] == "▁▁":
+        sub_words[0] = "▁"
+    LOG.debug(f"{token} -> {sub_words}")
+    return sub_words[0]

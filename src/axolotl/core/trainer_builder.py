@@ -14,21 +14,22 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import wraps
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Type, Union
+from typing import Any, Dict, List, Literal, Optional, Type, Union
 
+import schedulefree
 import torch
 import transformers
 from datasets import Dataset
+from torch import nn
 from torch.optim.lr_scheduler import OneCycleLR
 from torch.utils.data import BatchSampler, DataLoader, RandomSampler, SequentialSampler
 from transformers import (
     EarlyStoppingCallback,
-    PreTrainedModel,
     Trainer,
     TrainerCallback,
     TrainingArguments,
 )
-from transformers.trainer_utils import seed_worker
+from transformers.trainer_utils import EvalLoopOutput, seed_worker
 from transformers.utils import is_sagemaker_mp_enabled
 from trl import DPOTrainer
 from trl.trainer.utils import pad_to_length
@@ -36,7 +37,6 @@ from trl.trainer.utils import pad_to_length
 from axolotl.loraplus import create_loraplus_optimizer
 from axolotl.monkeypatch.multipack import SUPPORTED_MULTIPACK_MODEL_TYPES
 from axolotl.monkeypatch.relora import ReLoRACallback, ReLoRAScheduler
-from axolotl.utils import is_mlflow_available
 from axolotl.utils.callbacks import (
     EvalFirstStepCallback,
     GPUStatsCallback,
@@ -70,6 +70,10 @@ except ImportError:
     pass
 
 LOG = logging.getLogger("axolotl.core.trainer_builder")
+
+
+def is_mlflow_available():
+    return importlib.util.find_spec("mlflow") is not None
 
 
 def _sanitize_kwargs_for_tagging(tag_names, kwargs=None):
@@ -484,6 +488,31 @@ class AxolotlTrainer(Trainer):
             return self.orpo_compute_loss(model, inputs, return_outputs=return_outputs)
         return super().compute_loss(model, inputs, return_outputs=return_outputs)
 
+    def training_step(
+        self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]
+    ) -> torch.Tensor:
+        if self.optimizer.__class__.__name__ == "AdamWScheduleFree":
+            self.optimizer.train()
+        return super().training_step(model, inputs)
+
+    def evaluation_loop(
+        self,
+        dataloader: DataLoader,
+        description: str,
+        prediction_loss_only: Optional[bool] = None,
+        ignore_keys: Optional[List[str]] = None,
+        metric_key_prefix: str = "eval",
+    ) -> EvalLoopOutput:
+        if self.optimizer.__class__.__name__ == "AdamWScheduleFree":
+            self.optimizer.eval()
+        return super().evaluation_loop(
+            dataloader,
+            description,
+            prediction_loss_only=prediction_loss_only,
+            ignore_keys=ignore_keys,
+            metric_key_prefix=metric_key_prefix,
+        )
+
     @staticmethod
     def orpo_concatenate_inputs(inputs, label_pad_token=-100, pad_token=0, device=None):
         concatenated_batch = {}
@@ -800,15 +829,6 @@ class AxolotlDPOTrainer(DPOTrainer):
 
         return super().push_to_hub(*args, **kwargs)
 
-    def tokenize_row(
-        self, feature, model: Optional[Union[PreTrainedModel, torch.nn.Module]] = None
-    ) -> Dict:
-        res = super().tokenize_row(feature, model=model)
-        if self.tokenizer.bos_token_id is None and res["prompt_input_ids"][0] is None:
-            for key in res.keys():
-                res[key] = res[key][1:]
-        return res
-
 
 class TrainerBuilderBase(abc.ABC):
     """
@@ -940,16 +960,7 @@ class HFCausalTrainerBuilder(TrainerBuilderBase):
         callbacks = []
         if self.cfg.use_wandb and self.cfg.eval_table_size > 0:
             LogPredictionCallback = log_prediction_callback_factory(
-                trainer, self.tokenizer, "wandb"
-            )
-            callbacks.append(LogPredictionCallback(self.cfg))
-        if (
-            self.cfg.use_mlflow
-            and is_mlflow_available()
-            and self.cfg.eval_table_size > 0
-        ):
-            LogPredictionCallback = log_prediction_callback_factory(
-                trainer, self.tokenizer, "mlflow"
+                trainer, self.tokenizer
             )
             callbacks.append(LogPredictionCallback(self.cfg))
 
@@ -1312,6 +1323,33 @@ class HFCausalTrainerBuilder(TrainerBuilderBase):
             if Path(self.cfg.torchdistx_path).exists():
                 sys.path.append(self.cfg.torchdistx_path)
                 importlib.import_module("torchdistx")
+
+        if self.cfg.optimizer == "schedule_free_adamw":
+            sfa_kwargs = {"lr": training_arguments_kwargs["learning_rate"]}
+            if "adam_epsilon" in training_arguments_kwargs:
+                sfa_kwargs["eps"] = training_arguments_kwargs["adam_epsilon"]
+
+            if "weight_decay" in training_arguments_kwargs:
+                sfa_kwargs["weight_decay"] = training_arguments_kwargs["weight_decay"]
+
+            sfa_kwargs["warmup_steps"] = training_arguments_kwargs["warmup_steps"]
+
+            if (
+                "adam_beta1" in training_arguments_kwargs
+                and "adam_beta2" in training_arguments_kwargs
+            ):
+                sfa_kwargs["betas"] = (
+                    training_arguments_kwargs["adam_beta1"],
+                    training_arguments_kwargs["adam_beta2"],
+                )
+
+            trainer_kwargs["optimizers"] = (
+                schedulefree.AdamWScheduleFree(
+                    params=self.model.parameters(), **sfa_kwargs
+                ),
+                None,
+            )
+            training_arguments_kwargs["optim"] = "adamw_hf"
 
         training_args = (
             AxolotlTrainingArguments(  # pylint: disable=unexpected-keyword-arg

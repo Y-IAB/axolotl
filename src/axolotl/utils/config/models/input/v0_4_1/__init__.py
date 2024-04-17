@@ -1,6 +1,7 @@
 """
 Module for pydantic models for configuration
 """
+
 # pylint: disable=too-many-lines
 
 import logging
@@ -61,7 +62,11 @@ class RemappedParameters(BaseModel):
 class PretrainingDataset(BaseModel):
     """pretraining dataset configuration subset"""
 
+    name: Optional[str] = None
     path: Optional[str] = None
+    split: Optional[str] = "train"
+    text_column: Optional[str] = "text"
+    type: Optional[str] = "pretrain"
 
 
 class UserDefinedPrompterType(BaseModel):
@@ -93,6 +98,7 @@ class SFTDataset(BaseModel):
     ds_type: Optional[str] = None
     train_on_split: Optional[str] = None
 
+    field: Optional[str] = None
     field_human: Optional[str] = None
     field_model: Optional[str] = None
 
@@ -136,6 +142,7 @@ class ChatTemplate(str, Enum):
     chatml = "chatml"  # pylint: disable=invalid-name
     inst = "inst"  # pylint: disable=invalid-name
     gemma = "gemma"  # pylint: disable=invalid-name
+    cohere = "cohere"  # pylint: disable=invalid-name
 
 
 class LoftQConfig(BaseModel):
@@ -235,17 +242,6 @@ class LoraConfig(BaseModel):
                 if not self.load_in_4bit:
                     raise ValueError("Require cfg.load_in_4bit to be True for qlora")
         return self
-
-    @model_validator(mode="before")
-    @classmethod
-    def validate_quantized_dora(cls, data):
-        if data.get("peft_use_dora") and (
-            data.get("load_in_8bit") or data.get("load_in_4bit")
-        ):
-            raise ValueError(
-                "`peft_use_dora` is not currently compatible with quantized weights."
-            )
-        return data
 
 
 class ReLoRAConfig(BaseModel):
@@ -370,6 +366,23 @@ class MLFlowConfig(BaseModel):
     hf_mlflow_log_artifacts: Optional[bool] = None
 
 
+class LISAConfig(BaseModel):
+    """LISA options"""
+
+    lisa_n_layers: Optional[int] = Field(
+        default=None,
+        metadata={"help": "the number of activate layers in LISA"},
+    )
+    lisa_step_interval: Optional[int] = Field(
+        default=None,
+        metadata={"help": "how often to switch layers in LISA"},
+    )
+    lisa_layers_attribute: Optional[str] = Field(
+        default="model.layers",
+        metadata={"help": "path under the model to access the layers"},
+    )
+
+
 class WandbConfig(BaseModel):
     """wandb configuration subset"""
 
@@ -411,6 +424,7 @@ class AxolotlInputConfig(
     WandbConfig,
     MLFlowConfig,
     VesslConfig,
+    LISAConfig,
     RemappedParameters,
     DeprecatedParameters,
     BaseModel,
@@ -437,7 +451,7 @@ class AxolotlInputConfig(
     dataset_shard_idx: Optional[int] = None
 
     pretraining_dataset: Optional[  # type: ignore
-        conlist(Union[SFTDataset, PretrainingDataset], min_length=1)
+        conlist(Union[PretrainingDataset, SFTDataset], min_length=1)
     ] = Field(
         default=None, metadata={"help": {"streaming dataset to use for pretraining"}}
     )
@@ -496,6 +510,14 @@ class AxolotlInputConfig(
     eval_sample_packing: Optional[bool] = None
     pad_to_sequence_len: Optional[bool] = None
 
+    pretrain_multipack_buffer_size: Optional[int] = 10_000
+    pretrain_multipack_attn: Optional[bool] = Field(
+        default=True,
+        metadata={
+            "help": "whether to prevent cross attention for packed sequences during pretraining",
+        },
+    )
+
     xformers_attention: Optional[bool] = None
     sdp_attention: Optional[bool] = None
     s2_attention: Optional[bool] = None
@@ -540,6 +562,7 @@ class AxolotlInputConfig(
         Dict[Union[int, Literal["cpu", "disk"]], Union[int, str]]
     ] = None
     gpu_memory_limit: Optional[Union[int, str]] = None
+    low_cpu_mem_usage: Optional[bool] = None
 
     chat_template: Optional[ChatTemplate] = None
     default_system_message: Optional[str] = None
@@ -626,6 +649,20 @@ class AxolotlInputConfig(
         if data.get("sample_packing") and data.get("xformers_attention"):
             raise ValueError(
                 "sample_packing not compatible with xformers_attention. Use flash_attention"
+            )
+
+        return data
+
+    @model_validator(mode="before")
+    @classmethod
+    def check_sample_packing_wo_flash(cls, data):
+        if (
+            data.get("sample_packing")
+            and not data.get("flash_attention")
+            and not data.get("sdp_attention")
+        ):
+            LOG.warning(
+                "sample_packing without flash_attention or sdp_attention does not handle cross-attention."
             )
 
         return data

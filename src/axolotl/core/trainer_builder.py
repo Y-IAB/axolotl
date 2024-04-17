@@ -23,6 +23,7 @@ from torch.optim.lr_scheduler import OneCycleLR
 from torch.utils.data import BatchSampler, DataLoader, RandomSampler, SequentialSampler
 from transformers import (
     EarlyStoppingCallback,
+    PreTrainedModel,
     Trainer,
     TrainerCallback,
     TrainingArguments,
@@ -35,6 +36,7 @@ from trl.trainer.utils import pad_to_length
 from axolotl.loraplus import create_loraplus_optimizer
 from axolotl.monkeypatch.multipack import SUPPORTED_MULTIPACK_MODEL_TYPES
 from axolotl.monkeypatch.relora import ReLoRACallback, ReLoRAScheduler
+from axolotl.utils import is_mlflow_available
 from axolotl.utils.callbacks import (
     EvalFirstStepCallback,
     GPUStatsCallback,
@@ -45,6 +47,7 @@ from axolotl.utils.callbacks import (
     causal_lm_bench_eval_callback_factory,
     log_prediction_callback_factory,
 )
+from axolotl.utils.callbacks.lisa import lisa_callback_factory
 from axolotl.utils.collators import (
     BatchSamplerDataCollatorForSeq2Seq,
     DataCollatorForSeq2Seq,
@@ -67,10 +70,6 @@ except ImportError:
     pass
 
 LOG = logging.getLogger("axolotl.core.trainer_builder")
-
-
-def is_mlflow_available():
-    return importlib.util.find_spec("mlflow") is not None
 
 
 def _sanitize_kwargs_for_tagging(tag_names, kwargs=None):
@@ -199,6 +198,18 @@ class AxolotlTrainingArguments(TrainingArguments):
     )
     orpo_alpha: Optional[float] = field(
         default=None,
+    )
+    lisa_n_layers: Optional[int] = field(
+        default=None,
+        metadata={"help": "the number of activate layers in LISA"},
+    )
+    lisa_step_interval: Optional[int] = field(
+        default=None,
+        metadata={"help": "how often to switch layers in LISA"},
+    )
+    lisa_layers_attribute: Optional[str] = field(
+        default=None,
+        metadata={"help": "path under the model to access the layers"},
     )
 
 
@@ -789,6 +800,15 @@ class AxolotlDPOTrainer(DPOTrainer):
 
         return super().push_to_hub(*args, **kwargs)
 
+    def tokenize_row(
+        self, feature, model: Optional[Union[PreTrainedModel, torch.nn.Module]] = None
+    ) -> Dict:
+        res = super().tokenize_row(feature, model=model)
+        if self.tokenizer.bos_token_id is None and res["prompt_input_ids"][0] is None:
+            for key in res.keys():
+                res[key] = res[key][1:]
+        return res
+
 
 class TrainerBuilderBase(abc.ABC):
     """
@@ -925,7 +945,16 @@ class HFCausalTrainerBuilder(TrainerBuilderBase):
         callbacks = []
         if self.cfg.use_wandb and self.cfg.eval_table_size > 0:
             LogPredictionCallback = log_prediction_callback_factory(
-                trainer, self.tokenizer
+                trainer, self.tokenizer, "wandb"
+            )
+            callbacks.append(LogPredictionCallback(self.cfg))
+        if (
+            self.cfg.use_mlflow
+            and is_mlflow_available()
+            and self.cfg.eval_table_size > 0
+        ):
+            LogPredictionCallback = log_prediction_callback_factory(
+                trainer, self.tokenizer, "mlflow"
             )
             callbacks.append(LogPredictionCallback(self.cfg))
 
@@ -943,6 +972,8 @@ class HFCausalTrainerBuilder(TrainerBuilderBase):
             )
             callbacks.append(early_stop_cb)
 
+        if self.cfg.lisa_step_interval and self.cfg.lisa_n_layers:
+            callbacks.append(lisa_callback_factory(trainer))
         return callbacks
 
     def _get_trainer_cls(self):
@@ -1233,6 +1264,15 @@ class HFCausalTrainerBuilder(TrainerBuilderBase):
                 training_arguments_kwargs[
                     "relora_prune_ratio"
                 ] = self.cfg.relora_prune_ratio
+
+        if self.cfg.lisa_step_interval and self.cfg.lisa_n_layers:
+            training_arguments_kwargs["lisa_n_layers"] = self.cfg.lisa_n_layers
+            training_arguments_kwargs[
+                "lisa_step_interval"
+            ] = self.cfg.lisa_step_interval
+            training_arguments_kwargs[
+                "lisa_layers_attribute"
+            ] = self.cfg.lisa_layers_attribute
 
         training_arguments_kwargs = self.hook_pre_create_training_args(
             training_arguments_kwargs

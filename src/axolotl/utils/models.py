@@ -43,6 +43,7 @@ from axolotl.prompt_tokenizers import LLAMA_DEFAULT_EOS_TOKEN
 from axolotl.utils.bench import log_gpu_memory_usage
 from axolotl.utils.chat_templates import chat_templates
 from axolotl.utils.dict import DictDefault
+from axolotl.utils.distributed import zero_only
 from axolotl.utils.lora_embeddings import get_linear_embedding_layers
 
 LOG = logging.getLogger("axolotl")
@@ -247,10 +248,11 @@ def load_tokenizer(cfg):
             {"additional_special_tokens": additional_special_tokens}
         )
 
-    LOG.debug(f"EOS: {tokenizer.eos_token_id} / {tokenizer.eos_token}")
-    LOG.debug(f"BOS: {tokenizer.bos_token_id} / {tokenizer.bos_token}")
-    LOG.debug(f"PAD: {tokenizer.pad_token_id} / {tokenizer.pad_token}")
-    LOG.debug(f"UNK: {tokenizer.unk_token_id} / {tokenizer.unk_token}")
+    with zero_only():
+        LOG.debug(f"EOS: {tokenizer.eos_token_id} / {tokenizer.eos_token}")
+        LOG.debug(f"BOS: {tokenizer.bos_token_id} / {tokenizer.bos_token}")
+        LOG.debug(f"PAD: {tokenizer.pad_token_id} / {tokenizer.pad_token}")
+        LOG.debug(f"UNK: {tokenizer.unk_token_id} / {tokenizer.unk_token}")
 
     if cfg.chat_template:
         chat_template_string = chat_templates(cfg.chat_template)
@@ -402,7 +404,9 @@ def load_model(
         from accelerate import infer_auto_device_map
 
         with init_empty_weights():
-            model_canvas = AutoModelForCausalLM.from_config(model_config)
+            model_canvas = AutoModelForCausalLM.from_config(
+                model_config, trust_remote_code=cfg.trust_remote_code or False
+            )
         model_canvas.tie_weights()
         device_map = infer_auto_device_map(
             model_canvas,
@@ -433,6 +437,7 @@ def load_model(
 
     if cfg.revision_of_model:
         model_kwargs["revision"] = cfg.revision_of_model
+
     if cfg.gptq:
         if not hasattr(model_config, "quantization_config"):
             LOG.warning("model config does not contain quantization_config information")
@@ -454,6 +459,10 @@ def load_model(
             "bnb_4bit_quant_type": "nf4",
             "bnb_4bit_quant_storage": torch.bfloat16,
         }
+        if not cfg.deepspeed:
+            # for some reason, this causes the loss to be off by an order of magnitude
+            # but deepspeed needs this still in bfloat16
+            bnb_config["bnb_4bit_quant_storage"] = torch.float32
 
         if cfg.bnb_config_kwargs:
             bnb_config.update(cfg.bnb_config_kwargs)
@@ -501,6 +510,9 @@ def load_model(
     elif cfg.eager_attention:
         model_kwargs["attn_implementation"] = "eager"
         model_config._attn_implementation = "eager"  # pylint: disable=protected-access
+
+    if cfg.low_cpu_mem_usage:
+        model_kwargs["low_cpu_mem_usage"] = True
 
     qlora_fsdp = cfg.fsdp and cfg.adapter == "qlora"
 
@@ -890,7 +902,12 @@ def load_lora(model, cfg, inference=False, config_only=False):
         model = get_peft_model(model, lora_config)
 
     if rank == 0:
-        model.print_trainable_parameters()
+        try:
+            model.print_trainable_parameters()
+        except AttributeError as exc:
+            LOG.warning(
+                "Exception caught during model.print_trainable_parameters(): %s", exc
+            )
     elif cfg.fsdp and cfg.adapter == "qlora":
         setup_quantized_peft_meta_for_training(model)
 

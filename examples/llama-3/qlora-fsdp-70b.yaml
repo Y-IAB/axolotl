@@ -1,17 +1,17 @@
-base_model: NousResearch/Llama-2-7b-hf
+base_model: casperhansen/llama-3-70b-fp16
 model_type: LlamaForCausalLM
-tokenizer_type: LlamaTokenizer
+tokenizer_type: AutoTokenizer  # PreTrainedTokenizerFast
 
 load_in_8bit: false
 load_in_4bit: true
 strict: false
 
 datasets:
-  - path: yahma/alpaca-cleaned
+  - path: tatsu-lab/alpaca
     type: alpaca
 dataset_prepared_path: last_run_prepared
 val_set_size: 0.05
-output_dir: ./qlora-out
+output_dir: ./out/qlora-llama3-70b
 
 adapter: qlora
 lora_model_dir:
@@ -20,7 +20,7 @@ sequence_len: 512
 sample_packing: false
 pad_to_sequence_len: true
 
-lora_r: 32
+lora_r: 8
 lora_alpha: 16
 lora_dropout: 0.05
 lora_target_modules:
@@ -34,7 +34,7 @@ wandb_name:
 wandb_log_model:
 
 gradient_accumulation_steps: 4
-micro_batch_size: 4
+micro_batch_size: 1
 num_epochs: 4
 optimizer: adamw_torch
 lr_scheduler: cosine
@@ -75,4 +75,6 @@ fsdp_config:
   fsdp_auto_wrap_policy: TRANSFORMER_BASED_WRAP
   fsdp_transformer_layer_cls_to_wrap: LlamaDecoderLayer
   fsdp_state_dict_type: FULL_STATE_DICT
+  fsdp_sharding_strategy: FULL_SHARD
 special_tokens:
+  pad_token: <|end_of_text|>

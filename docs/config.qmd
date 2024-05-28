@@ -186,6 +186,11 @@ eval_sample_packing:
 # The trainer will provide recommended values for these values.
 sample_packing_eff_est:
 total_num_tokens:
+# Increasing the following values helps with packing, but usually only slightly (<%1.)
+# The number of samples packed at a time.
+sample_packing_group_size: 100000
+# The number of samples which can be packed into one sequence. Increase if using a large sequence_len with many short samples.
+sample_packing_bin_size: 200
 
 # Passed through to transformers when loading the model when launched without accelerate
 # Use `sequential` when training w/ model parallelism to limit memory
@@ -226,6 +231,12 @@ lora_modules_to_save:
 #  - lm_head
 
 lora_fan_in_fan_out: false
+
+# LoRA+ hyperparameters
+# For more details about the following options, see:
+# https://arxiv.org/abs/2402.12354  and `src/axolotl/core/train_builder.py`
+loraplus_lr_ratio: # loraplus learning rate ratio lr_B / lr_A. Recommended value is 2^4.
+loraplus_lr_embedding: #  loraplus learning rate for lora embedding layers. Default value is 1e-6.
 
 peft:
   # Configuration options for loftq initialization for LoRA
@@ -279,7 +290,7 @@ lr_quadratic_warmup:
 logging_steps:
 eval_steps: # Leave empty to eval at each epoch, integers for every N steps. decimal for fraction of total steps
 evals_per_epoch: # number of times per epoch to run evals, mutually exclusive with eval_steps
-save_strategy: # Set to `no` to skip checkpoint saves
+save_strategy: # Set to `"no"` to skip checkpoint saves
 save_steps: # Leave empty to save at each epoch
 saves_per_epoch: # number of times per epoch to save a checkpoint, mutually exclusive with save_steps
 save_total_limit: # Checkpoints saved at a time
